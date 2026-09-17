@@ -1,9 +1,7 @@
 import numpy as np
 
-from src.attention import MultiHeadAttention, create_causal_mask
 from src.embeddings import TokenEmbedding, positional_encoding
-from src.feed_forward import FeedForward, relu
-from src.normalization import LayerNorm
+from src.encoder import Encoder
 
 
 sentence = "i love machine learning"
@@ -22,6 +20,7 @@ vocab_size = 4
 d_model = 4
 num_heads = 2
 d_ff = 8
+num_layers = 2
 
 embedding_layer = TokenEmbedding(vocab_size=vocab_size, d_model=d_model, seed=0)
 embeddings = embedding_layer.forward(token_ids)
@@ -32,73 +31,80 @@ pe = positional_encoding(sequence_length=len(token_ids), d_model=d_model)
 
 X = scaled_embeddings + pe
 
-mha = MultiHeadAttention(d_model=d_model, num_heads=num_heads, seed=42)
-mask = create_causal_mask(sequence_length=len(token_ids))
+encoder = Encoder(
+    num_layers=num_layers,
+    d_model=d_model,
+    num_heads=num_heads,
+    d_ff=d_ff,
+    seed=42,
+)
 
-attention_output, attention_weights = mha.forward(X, mask=mask)
+encoder_output, attention_weights = encoder.forward(X, mask=None)
 
-# Residual connection: keep the original X and add the attention result.
-residual = X + attention_output
-
-# LayerNorm normalizes each token's features independently.
-layer_norm = LayerNorm(d_model)
-attention_normalized = layer_norm.forward(residual)
-
-ffn = FeedForward(d_model=d_model, d_ff=d_ff, seed=1)
-ffn_output = ffn.forward(attention_normalized)
-
-# Second residual: keep the attention-normalized representation and add the FFN result.
-ffn_residual = attention_normalized + ffn_output
-
-second_layer_norm = LayerNorm(d_model)
-final_output = second_layer_norm.forward(ffn_residual)
-
-final_means = np.mean(final_output, axis=-1)
-final_variances = np.var(final_output, axis=-1)
+final_means = np.mean(encoder_output, axis=-1)
+final_variances = np.var(encoder_output, axis=-1)
 
 
-print("Attention-normalized input:")
-print(attention_normalized)
+print("Encoder input X:")
+print(X)
+print("Encoder input shape:")
+print(X.shape)
 
-print("\nFFN output:")
-print(ffn_output)
+print("\nNumber of encoder layers:")
+print(encoder.num_layers)
 
-print("\nFFN residual result:")
-print(ffn_residual)
+print("\nAttention weights shape:")
+print(attention_weights.shape)
 
-print("\nFinal normalized output:")
-print(final_output)
+print("\nLayer 1 - Head 1 attention weights:")
+print(attention_weights[0, 0])
 
-print("\nFinal mean of each token:")
+print("\nLayer 1 - Head 2 attention weights:")
+print(attention_weights[0, 1])
+
+print("\nLayer 2 - Head 1 attention weights:")
+print(attention_weights[1, 0])
+
+print("\nLayer 2 - Head 2 attention weights:")
+print(attention_weights[1, 1])
+
+print("\nFinal encoder output:")
+print(encoder_output)
+print("Final encoder output shape:")
+print(encoder_output.shape)
+
+print("\nMean of each token in final output:")
 print(final_means)
 
-print("\nFinal variance of each token:")
+print("\nVariance of each token in final output:")
 print(final_variances)
 
-print("\nFinal output shape:")
-print(final_output.shape)
 
+assert X.shape == (4, 4)
+assert encoder_output.shape == (4, 4)
+assert attention_weights.shape == (2, 2, 4, 4)
 
-assert attention_normalized.shape == (4, 4)
-assert ffn_output.shape == (4, 4)
-assert ffn_residual.shape == (4, 4)
-assert final_output.shape == (4, 4)
-
-assert np.allclose(ffn_residual, attention_normalized + ffn_output)
+for layer_weights in attention_weights:
+    for head_weights in layer_weights:
+        assert np.allclose(head_weights.sum(axis=1), 1.0)
 
 assert np.allclose(final_means, 0.0, atol=1e-6)
 assert np.allclose(final_variances, 1.0, atol=1e-4)
 
-assert ffn.linear1.W.shape == (4, 8)
-assert ffn.linear1.b.shape == (8,)
-assert ffn.linear2.W.shape == (8, 4)
-assert ffn.linear2.b.shape == (4,)
+layer_1 = encoder.layers[0]
+layer_2 = encoder.layers[1]
 
-assert np.array_equal(relu(np.array([-2, -1, 0, 1, 2])), np.array([0, 0, 0, 1, 2]))
+assert layer_1 is not layer_2
+assert layer_1.self_attention is not layer_2.self_attention
+assert layer_1.feed_forward is not layer_2.feed_forward
+assert layer_1.self_attention.heads[0].W_Q is not layer_2.self_attention.heads[0].W_Q
+assert layer_1.feed_forward.linear1 is not layer_2.feed_forward.linear1
 
-assert attention_weights.shape == (2, 4, 4)
-for head_weights in attention_weights:
-    assert np.allclose(head_weights.sum(axis=1), 1.0)
-    assert np.allclose(head_weights[0, 1:], 0.0)
-    assert np.allclose(head_weights[1, 2:], 0.0)
-    assert np.allclose(head_weights[2, 3], 0.0)
+assert not np.array_equal(
+    layer_1.self_attention.heads[0].W_Q.W,
+    layer_2.self_attention.heads[0].W_Q.W,
+)
+assert not np.array_equal(
+    layer_1.feed_forward.linear1.W,
+    layer_2.feed_forward.linear1.W,
+)
