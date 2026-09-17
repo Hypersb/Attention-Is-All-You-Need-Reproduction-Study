@@ -2,6 +2,7 @@ import numpy as np
 
 from src.attention import MultiHeadAttention, create_causal_mask
 from src.embeddings import TokenEmbedding, positional_encoding
+from src.feed_forward import FeedForward, relu
 from src.normalization import LayerNorm
 
 
@@ -20,6 +21,7 @@ token_ids = np.array([vocab[token] for token in tokens])
 vocab_size = 4
 d_model = 4
 num_heads = 2
+d_ff = 8
 
 embedding_layer = TokenEmbedding(vocab_size=vocab_size, d_model=d_model, seed=0)
 embeddings = embedding_layer.forward(token_ids)
@@ -40,43 +42,59 @@ residual = X + attention_output
 
 # LayerNorm normalizes each token's features independently.
 layer_norm = LayerNorm(d_model)
-normalized_output = layer_norm.forward(residual)
+attention_normalized = layer_norm.forward(residual)
 
-token_means = np.mean(normalized_output, axis=-1)
-token_variances = np.var(normalized_output, axis=-1)
+ffn = FeedForward(d_model=d_model, d_ff=d_ff, seed=1)
+ffn_output = ffn.forward(attention_normalized)
 
+# Second residual: keep the attention-normalized representation and add the FFN result.
+ffn_residual = attention_normalized + ffn_output
 
-print("X before attention:")
-print(X)
+second_layer_norm = LayerNorm(d_model)
+final_output = second_layer_norm.forward(ffn_residual)
 
-print("\nAttention output:")
-print(attention_output)
-
-print("\nResidual result (X + attention_output):")
-print(residual)
-
-print("\nNormalized output:")
-print(normalized_output)
-
-print("\nMean of each token after LayerNorm:")
-print(token_means)
-
-print("\nVariance of each token after LayerNorm:")
-print(token_variances)
-
-print("\nNormalized output shape:")
-print(normalized_output.shape)
+final_means = np.mean(final_output, axis=-1)
+final_variances = np.var(final_output, axis=-1)
 
 
-assert X.shape == (4, 4)
-assert attention_output.shape == (4, 4)
-assert residual.shape == (4, 4)
-assert normalized_output.shape == (4, 4)
+print("Attention-normalized input:")
+print(attention_normalized)
 
-assert np.allclose(residual, X + attention_output)
+print("\nFFN output:")
+print(ffn_output)
 
-assert np.allclose(token_means, 0.0, atol=1e-6)
-assert np.allclose(token_variances, 1.0, atol=1e-4)
+print("\nFFN residual result:")
+print(ffn_residual)
+
+print("\nFinal normalized output:")
+print(final_output)
+
+print("\nFinal mean of each token:")
+print(final_means)
+
+print("\nFinal variance of each token:")
+print(final_variances)
+
+print("\nFinal output shape:")
+print(final_output.shape)
+
+
+assert attention_normalized.shape == (4, 4)
+assert ffn_output.shape == (4, 4)
+assert ffn_residual.shape == (4, 4)
+assert final_output.shape == (4, 4)
+
+assert np.allclose(ffn_residual, attention_normalized + ffn_output)
+
+assert np.allclose(final_means, 0.0, atol=1e-6)
+assert np.allclose(final_variances, 1.0, atol=1e-4)
+
+assert ffn.linear1.W.shape == (4, 8)
+assert ffn.linear1.b.shape == (8,)
+assert ffn.linear2.W.shape == (8, 4)
+assert ffn.linear2.b.shape == (4,)
+
+assert np.array_equal(relu(np.array([-2, -1, 0, 1, 2])), np.array([0, 0, 0, 1, 2]))
 
 assert attention_weights.shape == (2, 4, 4)
 for head_weights in attention_weights:
