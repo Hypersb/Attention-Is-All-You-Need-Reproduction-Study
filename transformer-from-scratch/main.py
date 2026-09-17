@@ -2,6 +2,7 @@ import numpy as np
 
 from src.attention import MultiHeadAttention, create_causal_mask
 from src.embeddings import TokenEmbedding, positional_encoding
+from src.normalization import LayerNorm
 
 
 sentence = "i love machine learning"
@@ -32,53 +33,54 @@ X = scaled_embeddings + pe
 mha = MultiHeadAttention(d_model=d_model, num_heads=num_heads, seed=42)
 mask = create_causal_mask(sequence_length=len(token_ids))
 
-output, attention_weights = mha.forward(X, mask=mask)
+attention_output, attention_weights = mha.forward(X, mask=mask)
+
+# Residual connection: keep the original X and add the attention result.
+residual = X + attention_output
+
+# LayerNorm normalizes each token's features independently.
+layer_norm = LayerNorm(d_model)
+normalized_output = layer_norm.forward(residual)
+
+token_means = np.mean(normalized_output, axis=-1)
+token_variances = np.var(normalized_output, axis=-1)
 
 
-print("Tokens:")
-print(tokens)
-
-print("\nToken IDs:")
-print(token_ids)
-
-print("\nRaw token embeddings:")
-print(embeddings)
-print("Raw embedding shape:")
-print(embeddings.shape)
-
-print("\nPositional encoding:")
-print(pe)
-print("Positional encoding shape:")
-print(pe.shape)
-
-print("\nFinal X:")
+print("X before attention:")
 print(X)
-print("Final X.shape:")
-print(X.shape)
 
-print("\nAttention weights for Head 1:")
-print(attention_weights[0])
+print("\nAttention output:")
+print(attention_output)
 
-print("\nAttention weights for Head 2:")
-print(attention_weights[1])
+print("\nResidual result (X + attention_output):")
+print(residual)
 
-print("\nFinal multi-head output:")
-print(output)
-print("Final output shape:")
-print(output.shape)
+print("\nNormalized output:")
+print(normalized_output)
+
+print("\nMean of each token after LayerNorm:")
+print(token_means)
+
+print("\nVariance of each token after LayerNorm:")
+print(token_variances)
+
+print("\nNormalized output shape:")
+print(normalized_output.shape)
 
 
-assert token_ids.shape == (4,)
-assert embeddings.shape == (4, 4)
-assert pe.shape == (4, 4)
 assert X.shape == (4, 4)
-assert attention_weights.shape == (2, 4, 4)
-assert output.shape == (4, 4)
+assert attention_output.shape == (4, 4)
+assert residual.shape == (4, 4)
+assert normalized_output.shape == (4, 4)
 
+assert np.allclose(residual, X + attention_output)
+
+assert np.allclose(token_means, 0.0, atol=1e-6)
+assert np.allclose(token_variances, 1.0, atol=1e-4)
+
+assert attention_weights.shape == (2, 4, 4)
 for head_weights in attention_weights:
     assert np.allclose(head_weights.sum(axis=1), 1.0)
     assert np.allclose(head_weights[0, 1:], 0.0)
     assert np.allclose(head_weights[1, 2:], 0.0)
     assert np.allclose(head_weights[2, 3], 0.0)
-
-assert np.allclose(pe[0], np.array([0.0, 1.0, 0.0, 1.0]))
