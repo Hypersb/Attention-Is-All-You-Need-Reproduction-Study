@@ -1,5 +1,6 @@
 import numpy as np
 
+from src.linear import Linear
 from src.math_utils import softmax
 
 
@@ -55,3 +56,32 @@ def scaled_dot_product_attention(Q, K, V, mask=None):
     output = attention_weights @ V
 
     return output, attention_weights
+
+
+class QKVProjection:
+    """
+    Create Query, Key, and Value matrices from input X.
+
+        Q = X @ W_Q
+        K = X @ W_K
+        V = X @ W_V
+
+    W_Q, W_K, and W_V are independent linear projections.
+    """
+
+    def __init__(self, d_model, d_k, d_v, seed=None):
+        if seed is None:
+            q_seed, k_seed, v_seed = None, None, None
+        else:
+            q_seed, k_seed, v_seed = seed, seed + 1, seed + 2
+
+        self.W_Q = Linear(d_model, d_k, seed=q_seed)
+        self.W_K = Linear(d_model, d_k, seed=k_seed)
+        self.W_V = Linear(d_model, d_v, seed=v_seed)
+
+    def forward(self, X):
+        Q = self.W_Q.forward(X)
+        K = self.W_K.forward(X)
+        V = self.W_V.forward(X)
+
+        return Q, K, V
