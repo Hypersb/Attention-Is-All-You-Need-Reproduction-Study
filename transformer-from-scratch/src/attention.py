@@ -79,10 +79,13 @@ class QKVProjection:
         self.W_K = Linear(d_model, d_k, seed=k_seed)
         self.W_V = Linear(d_model, d_v, seed=v_seed)
 
-    def forward(self, X):
-        Q = self.W_Q.forward(X)
-        K = self.W_K.forward(X)
-        V = self.W_V.forward(X)
+    def forward(self, query_input, key_value_input=None):
+        if key_value_input is None:
+            key_value_input = query_input
+
+        Q = self.W_Q.forward(query_input)
+        K = self.W_K.forward(key_value_input)
+        V = self.W_V.forward(key_value_input)
 
         return Q, K, V
 
@@ -117,12 +120,12 @@ class MultiHeadAttention:
         wo_seed = None if seed is None else seed + num_heads * 3
         self.W_O = Linear(num_heads * self.d_v, d_model, seed=wo_seed)
 
-    def forward(self, X, mask=None):
+    def forward(self, query_input, key_value_input=None, mask=None):
         head_outputs = []
         attention_weights = []
 
         for projection in self.heads:
-            Q, K, V = projection.forward(X)
+            Q, K, V = projection.forward(query_input, key_value_input)
             head_output, weights = scaled_dot_product_attention(Q, K, V, mask)
             head_outputs.append(head_output)
             attention_weights.append(weights)

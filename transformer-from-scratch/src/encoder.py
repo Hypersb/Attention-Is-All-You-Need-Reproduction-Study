@@ -22,7 +22,7 @@ class EncoderLayer:
         self.norm2 = LayerNorm(d_model)
 
     def forward(self, X, mask=None):
-        attention_output, attention_weights = self.self_attention.forward(X, mask)
+        attention_output, attention_weights = self.self_attention.forward(X, mask=mask)
 
         X1 = X + attention_output
         X1 = self.norm1.forward(X1)
