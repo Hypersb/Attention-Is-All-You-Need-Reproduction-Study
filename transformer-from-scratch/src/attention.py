@@ -85,3 +85,50 @@ class QKVProjection:
         V = self.W_V.forward(X)
 
         return Q, K, V
+
+
+class MultiHeadAttention:
+    """
+    Multi-head attention from Attention Is All You Need.
+
+        head_i = Attention(X @ W_Q_i, X @ W_K_i, X @ W_V_i)
+
+        MultiHead(X) = Concat(head_1, ..., head_h) @ W_O
+    """
+
+    def __init__(self, d_model, num_heads, seed=None):
+        if d_model % num_heads != 0:
+            raise ValueError(
+                f"d_model ({d_model}) must be divisible by num_heads ({num_heads})"
+            )
+
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.d_v = d_model // num_heads
+
+        self.heads = []
+        for i in range(num_heads):
+            head_seed = None if seed is None else seed + i * 3
+            self.heads.append(
+                QKVProjection(d_model, self.d_k, self.d_v, seed=head_seed)
+            )
+
+        wo_seed = None if seed is None else seed + num_heads * 3
+        self.W_O = Linear(num_heads * self.d_v, d_model, seed=wo_seed)
+
+    def forward(self, X, mask=None):
+        head_outputs = []
+        attention_weights = []
+
+        for projection in self.heads:
+            Q, K, V = projection.forward(X)
+            head_output, weights = scaled_dot_product_attention(Q, K, V, mask)
+            head_outputs.append(head_output)
+            attention_weights.append(weights)
+
+        concatenated = np.concatenate(head_outputs, axis=-1)
+        output = self.W_O.forward(concatenated)
+        attention_weights = np.stack(attention_weights, axis=0)
+
+        return output, attention_weights
