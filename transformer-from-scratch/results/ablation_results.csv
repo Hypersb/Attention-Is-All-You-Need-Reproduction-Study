@@ -1,0 +1,5 @@
+configuration,final_loss,initial_loss,experiment,num_heads
+with_positional_encoding,0.00048014682926207517,2.271144170946578,positional_encoding,
+without_positional_encoding,0.0004065313622329671,2.458312412964812,positional_encoding,
+,0.12544660947846534,2.2068115674505115,num_heads,1.0
+,0.00048014682926207517,2.271144170946578,num_heads,2.0

@@ -1,0 +1,4 @@
+source,prediction
+cats are nice,i love cats <EOS>
+dogs are nice,i love dogs <EOS>
+i like cute,dogs are nice <EOS>

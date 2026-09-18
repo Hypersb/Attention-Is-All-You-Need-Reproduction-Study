@@ -1,0 +1,7 @@
+source,expected_target,predicted_target,correct
+i love cats,cats are cute <EOS>,cats are cute <EOS>,True
+i love dogs,dogs are cute <EOS>,dogs are cute <EOS>,True
+i like cats,cats are nice <EOS>,cats are nice <EOS>,True
+i like dogs,dogs are nice <EOS>,dogs are nice <EOS>,True
+cats are cute,i love cats <EOS>,i love cats <EOS>,True
+dogs are cute,i love dogs <EOS>,i love dogs <EOS>,True

@@ -34,6 +34,22 @@ class EncoderLayer:
 
         return output, attention_weights
 
+    def backward(self, d_output):
+        d_x2 = self.norm2.backward(d_output)
+        d_x1 = d_x2 + self.feed_forward.backward(d_x2)
+
+        d_residual = self.norm1.backward(d_x1)
+        d_x = d_residual + self.self_attention.backward(d_residual)
+        return d_x
+
+    def parameters_and_gradients(self):
+        params = []
+        params.extend(self.self_attention.parameters_and_gradients())
+        params.extend(self.norm1.parameters_and_gradients())
+        params.extend(self.feed_forward.parameters_and_gradients())
+        params.extend(self.norm2.parameters_and_gradients())
+        return params
+
 
 class Encoder:
     """
@@ -60,3 +76,15 @@ class Encoder:
         all_attention_weights = np.stack(all_attention_weights, axis=0)
 
         return X, all_attention_weights
+
+    def backward(self, d_output):
+        d_x = d_output
+        for layer in reversed(self.layers):
+            d_x = layer.backward(d_x)
+        return d_x
+
+    def parameters_and_gradients(self):
+        params = []
+        for layer in self.layers:
+            params.extend(layer.parameters_and_gradients())
+        return params

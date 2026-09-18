@@ -5,17 +5,23 @@ class TokenEmbedding:
     """
     Lookup table from token IDs to d_model-dimensional vectors.
 
-    The original Transformer scales embeddings by sqrt(d_model)
-    before adding positional encoding. That scaling is left
-    explicit in main.py so it is easy to see.
+    Scaling by sqrt(d_model) is applied outside this class so the
+    Transformer backward pass can account for it explicitly.
     """
 
     def __init__(self, vocab_size, d_model, seed=None):
         rng = np.random.default_rng(seed)
         self.weights = rng.normal(loc=0.0, scale=0.1, size=(vocab_size, d_model))
+        self.d_weights = np.zeros_like(self.weights)
 
     def forward(self, token_ids):
         return self.weights[token_ids]
+
+    def backward(self, token_ids, d_output):
+        np.add.at(self.d_weights, token_ids, d_output)
+
+    def parameters_and_gradients(self):
+        return [(self.weights, self.d_weights)]
 
 
 def positional_encoding(sequence_length, d_model):
